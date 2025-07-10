@@ -1,0 +1,4 @@
+playwright
+mcp
+python-dotenv
+async-timeout

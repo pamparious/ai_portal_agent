@@ -1,0 +1,33 @@
+# Files and directories to ignore for Claude
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+
+# Editor/IDE files
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Test reports
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Playwright specific
+playwright-report/
+
+# Operating System files
+.DS_Store
+thumbs.db
+
+# Sensitive files (if any)
+.env
+
+# Screenshots
+screenshot.png
