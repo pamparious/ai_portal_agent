@@ -1,8 +1,8 @@
 import pytest
 import asyncio
 from playwright.async_api import async_playwright
-from mcp_server.browser_agent import BrowserAgent
-from src.portal.portal_interface import PortalInterface
+from ...mcp_server.browser_agent import BrowserAgent
+from ...src.portal.portal_interface import PortalInterface
 from pytest_asyncio import fixture as async_fixture
 
 @async_fixture(scope="function")

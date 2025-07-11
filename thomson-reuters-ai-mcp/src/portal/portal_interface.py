@@ -136,39 +136,49 @@ class PortalInterface:
     async def wait_for_response(self, timeout: int = 60) -> str:
         """
         Waits for and retrieves the AI's response from the chat interface.
-        Uses dynamic detection of new messages.
+        Uses improved detection to distinguish AI responses from user messages.
         """
         logger.info(f"Waiting for response (timeout: {timeout}s)...")
         
-        # First, get initial message count
-        initial_message_count = await self._get_message_count()
-        logger.debug(f"Initial message count: {initial_message_count}")
+        # Get baseline state before waiting
+        initial_messages = await self._get_ordered_messages()
+        initial_ai_count = len([msg for msg in initial_messages if msg['type'] == 'ai'])
+        logger.debug(f"Initial AI message count: {initial_ai_count}")
         
         start_time = time.time()
+        last_check_time = start_time
         
         while time.time() - start_time < timeout:
             try:
-                # Wait for new messages to appear
-                await asyncio.sleep(1)
+                # Wait before checking again
+                await asyncio.sleep(2)
                 
-                current_message_count = await self._get_message_count()
+                # Check for new AI messages
+                current_messages = await self._get_ordered_messages()
+                current_ai_count = len([msg for msg in current_messages if msg['type'] == 'ai'])
                 
-                # Check if new messages appeared
-                if current_message_count > initial_message_count:
-                    logger.debug(f"New messages detected: {current_message_count} vs {initial_message_count}")
+                # If we have a new AI message, get it
+                if current_ai_count > initial_ai_count:
+                    logger.debug(f"New AI messages detected: {current_ai_count} vs {initial_ai_count}")
                     
-                    # Try to get the latest response
                     response = await self._get_latest_response()
                     if response and response.strip():
                         logger.info(f"Response received: {response[:50]}..." if len(response) > 50 else f"Response received: {response}")
                         return response.strip()
                 
-                # Also check for loading indicators disappearing
-                if await self._check_loading_complete():
-                    response = await self._get_latest_response()
-                    if response and response.strip():
-                        logger.info(f"Response received after loading: {response[:50]}..." if len(response) > 50 else f"Response received: {response}")
-                        return response.strip()
+                # Also check for loading completion every 5 seconds
+                if time.time() - last_check_time > 5:
+                    if await self._check_loading_complete():
+                        response = await self._get_latest_response()
+                        if response and response.strip():
+                            logger.info(f"Response received after loading: {response[:50]}..." if len(response) > 50 else f"Response received: {response}")
+                            return response.strip()
+                    last_check_time = time.time()
+                
+                # Progress indicator
+                elapsed = time.time() - start_time
+                if elapsed % 10 == 0:  # Log every 10 seconds
+                    logger.debug(f"Still waiting for response... ({elapsed:.0f}s elapsed)")
                 
             except Exception as e:
                 logger.debug(f"Error while waiting for response: {e}")
@@ -178,6 +188,7 @@ class PortalInterface:
         logger.warning(f"Timeout after {timeout}s, attempting to get any available response...")
         response = await self._get_latest_response()
         if response and response.strip():
+            logger.info(f"Found response on timeout: {response[:50]}..." if len(response) > 50 else f"Found response: {response}")
             return response.strip()
         
         raise TimeoutError(f"No AI response found within {timeout} seconds")
@@ -207,36 +218,79 @@ class PortalInterface:
     async def _get_latest_response(self) -> Optional[str]:
         """Get the latest AI response from the chat"""
         try:
-            # Try multiple strategies to find the response
+            # Strategy 1: Look for AI-specific message containers
+            ai_response_selectors = [
+                # Look for AI avatar/icon indicators
+                'div:has-text("AI"):has-text("Claude"):not(:has-text("AP"))',
+                'div:has-text("Claude 4 Sonnet"):not(:has-text("AP"))',
+                '[class*="ai-message"]',
+                '[class*="assistant-message"]',
+                '[data-role="assistant"]',
+                '[data-type="ai"]',
+                # Look for messages with AI indicators
+                'div:has([class*="ai-avatar"])',
+                'div:has([alt*="AI"])',
+                'div:has([alt*="Claude"])',
+            ]
             
-            # Strategy 1: Look for common response patterns
-            for selector in self.response_selectors:
+            for selector in ai_response_selectors:
                 try:
                     elements = self.page.locator(selector)
                     count = await elements.count()
                     
                     if count > 0:
-                        # Get the last element (most recent)
+                        # Get the last AI response (most recent)
                         last_element = elements.nth(count - 1)
                         text = await last_element.inner_text()
                         
-                        if text and len(text.strip()) > 10:  # Reasonable response length
-                            return text
-                except Exception:
+                        # Clean up the text (remove timestamps, cost info, etc.)
+                        cleaned_text = self._clean_ai_response_text(text)
+                        
+                        if cleaned_text and len(cleaned_text.strip()) > 10:
+                            logger.debug(f"Found AI response with selector: {selector}")
+                            return cleaned_text
+                except Exception as e:
+                    logger.debug(f"Error with AI response selector {selector}: {e}")
                     continue
             
-            # Strategy 2: Look for any text that might be a response
+            # Strategy 2: Look for messages that follow user messages
             try:
-                # Get all text content and look for patterns
+                # Find all message containers and identify AI responses by position/content
+                message_containers = await self._get_ordered_messages()
+                
+                if len(message_containers) >= 2:
+                    # Look for the last message that's not from the user
+                    for i in range(len(message_containers) - 1, -1, -1):
+                        message_text = message_containers[i]['text']
+                        message_type = message_containers[i]['type']
+                        
+                        # Skip user messages (contain user initials or question patterns)
+                        if message_type == 'ai' or (message_type == 'unknown' and not self._is_user_message(message_text)):
+                            cleaned_text = self._clean_ai_response_text(message_text)
+                            if cleaned_text and len(cleaned_text.strip()) > 10:
+                                logger.debug(f"Found AI response by position analysis")
+                                return cleaned_text
+                
+            except Exception as e:
+                logger.debug(f"Error in position-based response detection: {e}")
+            
+            # Strategy 3: Fallback - look for any reasonable response text
+            try:
+                # Get all text content and look for response patterns
                 page_content = await self.page.inner_text('body')
                 
-                # Look for common response patterns
+                # Look for common AI response patterns (not user questions)
                 response_patterns = [
                     'The capital of France is',
                     'Paris is the capital',
                     'France\'s capital is',
                     'The answer is',
-                    'capital of France',
+                    'According to',
+                    'Based on',
+                    'Here is',
+                    'Here are',
+                    'I can help',
+                    'Let me',
                 ]
                 
                 for pattern in response_patterns:
@@ -245,16 +299,164 @@ class PortalInterface:
                         sentences = page_content.split('.')
                         for sentence in sentences:
                             if pattern.lower() in sentence.lower():
-                                return sentence.strip() + '.'
+                                # Make sure it's not a user question
+                                if not ('?' in sentence or sentence.strip().startswith('What') or sentence.strip().startswith('How')):
+                                    return sentence.strip() + '.'
                 
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Error in fallback response detection: {e}")
             
             return None
             
         except Exception as e:
             logger.debug(f"Error getting latest response: {e}")
             return None
+    
+    def _clean_ai_response_text(self, text: str) -> str:
+        """Clean AI response text by removing timestamps, cost info, etc."""
+        if not text:
+            return ""
+        
+        lines = text.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Skip empty lines
+            if not line:
+                continue
+                
+            # Skip timestamp lines (e.g., "7m ago")
+            if line.endswith(' ago') or line.endswith(' min ago') or line.endswith(' hours ago'):
+                continue
+                
+            # Skip cost information lines
+            if 'query cost' in line.lower() or 'usd' in line.lower() or '$' in line:
+                continue
+                
+            # Skip model name lines
+            if 'claude' in line.lower() and 'sonnet' in line.lower():
+                continue
+                
+            # Skip user initials (AP, etc.)
+            if len(line) <= 3 and line.isupper():
+                continue
+                
+            # Keep the actual response content
+            cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines).strip()
+    
+    def _is_user_message(self, text: str) -> bool:
+        """Determine if a message is from the user based on content patterns"""
+        if not text:
+            return False
+            
+        text_lower = text.lower().strip()
+        
+        # Check for question patterns (typical user messages)
+        question_patterns = [
+            'what is',
+            'what are',
+            'how to',
+            'how do',
+            'why is',
+            'why are',
+            'where is',
+            'where are',
+            'when is',
+            'when are',
+            'who is',
+            'who are',
+            'can you',
+            'could you',
+            'would you',
+            'please',
+        ]
+        
+        for pattern in question_patterns:
+            if pattern in text_lower:
+                return True
+                
+        # Check if it ends with a question mark
+        if text.strip().endswith('?'):
+            return True
+            
+        # Check if it contains user initials (AP, etc.)
+        if 'ap' in text_lower and len(text) < 100:  # Short messages with initials
+            return True
+            
+        return False
+    
+    async def _get_ordered_messages(self) -> List[Dict[str, Any]]:
+        """Get all messages in chronological order with type identification"""
+        messages = []
+        
+        try:
+            # Look for message containers
+            message_selectors = [
+                'div:has-text("AP")',  # User messages
+                'div:has-text("AI")',  # AI messages
+                'div:has-text("Claude")',  # AI messages
+                '[class*="message"]',
+                '[role="article"]',
+                'div[class*="conversation"] > div',
+            ]
+            
+            for selector in message_selectors:
+                try:
+                    elements = self.page.locator(selector)
+                    count = await elements.count()
+                    
+                    for i in range(count):
+                        element = elements.nth(i)
+                        text = await element.inner_text()
+                        
+                        if text and len(text.strip()) > 5:
+                            # Determine message type
+                            msg_type = 'unknown'
+                            if 'AP' in text or self._is_user_message(text):
+                                msg_type = 'user'
+                            elif 'AI' in text or 'Claude' in text:
+                                msg_type = 'ai'
+                            
+                            # Get position for ordering
+                            try:
+                                position = await element.bounding_box()
+                                y_pos = position['y'] if position else 0
+                            except:
+                                y_pos = 0
+                            
+                            messages.append({
+                                'text': text,
+                                'type': msg_type,
+                                'position': y_pos,
+                                'selector': selector
+                            })
+                            
+                except Exception as e:
+                    logger.debug(f"Error getting messages with selector {selector}: {e}")
+                    continue
+            
+            # Sort by position (top to bottom)
+            messages.sort(key=lambda x: x['position'])
+            
+            # Remove duplicates (same text content)
+            unique_messages = []
+            seen_texts = set()
+            
+            for msg in messages:
+                text_key = msg['text'][:50]  # Use first 50 chars as key
+                if text_key not in seen_texts:
+                    seen_texts.add(text_key)
+                    unique_messages.append(msg)
+            
+            return unique_messages
+            
+        except Exception as e:
+            logger.debug(f"Error getting ordered messages: {e}")
+            return []
     
     async def _check_loading_complete(self) -> bool:
         """Check if loading indicators are gone"""
