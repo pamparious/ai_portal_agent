@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 from typing import Optional, List, Dict, Any
-from playwright.async_api import Page, Locator
+from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
 
@@ -218,78 +218,94 @@ class PortalInterface:
     async def _get_latest_response(self) -> Optional[str]:
         """Get the latest AI response from the chat"""
         try:
-            # Strategy 1: Look for most recent AI response first
+            # Strategy 1: Look for AI response content using specific selectors
             try:
-                # Find all message containers and identify AI responses by content and position
-                message_containers = await self._get_ordered_messages()
+                # Use the correct selectors based on DOM analysis
+                ai_response_selectors = [
+                    '[data-testid="remark-wrapper"]',  # Main AI response container
+                    '._copyButton_1owfm_31',  # AI response with copy button
+                    'saf-message-box[appearance="agent"] [data-testid="remark-wrapper"]',  # AI message box
+                    'saf-message-box[appearance="agent"] p',  # AI message paragraphs
+                ]
                 
-                if len(message_containers) >= 1:
-                    # Look for AI responses, prioritizing the most recent ones
-                    ai_responses = []
-                    
-                    for msg in message_containers:
-                        message_text = msg['text']
-                        message_type = msg['type']
+                for selector in ai_response_selectors:
+                    try:
+                        elements = self.page.locator(selector)
+                        count = await elements.count()
                         
-                        # Look for AI responses
-                        if (message_type == 'ai' or 
-                            (message_type == 'unknown' and self._is_likely_ai_response(message_text))):
+                        if count > 0:
+                            # Get the last AI response (most recent)
+                            last_element = elements.nth(count - 1)
+                            text = await last_element.inner_text()
                             
-                            # Skip UI elements
-                            if not self._is_ui_element(message_text):
-                                cleaned_text = self._clean_ai_response_text(message_text)
-                                if cleaned_text and len(cleaned_text.strip()) > 10:
-                                    ai_responses.append({
-                                        'text': cleaned_text,
-                                        'timestamp_score': msg.get('timestamp_score', 0),
-                                        'position': msg['position']
-                                    })
-                    
-                    # Sort by timestamp score (most recent first), then by position (bottom first)
-                    ai_responses.sort(key=lambda x: (-x['timestamp_score'], -x['position']))
-                    
-                    if ai_responses:
-                        best_response = ai_responses[0]['text']
-                        logger.debug(f"Found AI response by content analysis: {best_response[:50]}...")
-                        return best_response
+                            # Clean up the text
+                            cleaned_text = self._clean_ai_response_text(text)
+                            
+                            if cleaned_text and len(cleaned_text.strip()) > 10 and not self._is_ui_element(cleaned_text):
+                                logger.debug(f"Found AI response with selector: {selector}")
+                                return cleaned_text
+                    except Exception as e:
+                        logger.debug(f"Error with AI response selector {selector}: {e}")
+                        continue
                 
             except Exception as e:
-                logger.debug(f"Error in content-based response detection: {e}")
+                logger.debug(f"Error in direct selector response detection: {e}")
             
-            # Strategy 2: Look for AI-specific message containers
-            ai_response_selectors = [
-                # Look for AI avatar/icon indicators
-                'div:has-text("AI"):has-text("Claude"):not(:has-text("AP"))',
-                'div:has-text("Claude 4 Sonnet"):not(:has-text("AP"))',
-                '[class*="ai-message"]',
-                '[class*="assistant-message"]',
-                '[data-role="assistant"]',
-                '[data-type="ai"]',
-                # Look for messages with AI indicators
-                'div:has([class*="ai-avatar"])',
-                'div:has([alt*="AI"])',
-                'div:has([alt*="Claude"])',
-            ]
-            
-            for selector in ai_response_selectors:
-                try:
-                    elements = self.page.locator(selector)
-                    count = await elements.count()
+            # Strategy 2: Look for saf-message-box elements
+            try:
+                # Get AI message boxes
+                ai_message_boxes = self.page.locator('saf-message-box[appearance="agent"]')
+                count = await ai_message_boxes.count()
+                
+                if count > 0:
+                    # Get the last AI message box
+                    last_ai_box = ai_message_boxes.nth(count - 1)
                     
-                    if count > 0:
-                        # Get the last AI response (most recent)
-                        last_element = elements.nth(count - 1)
-                        text = await last_element.inner_text()
+                    # Try to get the content from within the message box
+                    try:
+                        # Look for the actual content within the message box
+                        content_selectors = [
+                            '[data-testid="remark-wrapper"]',
+                            'p',
+                            'div:not([class*="metadata"]):not([class*="avatar"])',
+                        ]
                         
-                        # Clean up the text (remove timestamps, cost info, etc.)
-                        cleaned_text = self._clean_ai_response_text(text)
+                        for content_selector in content_selectors:
+                            try:
+                                content_elements = last_ai_box.locator(content_selector)
+                                content_count = await content_elements.count()
+                                
+                                if content_count > 0:
+                                    # Get the first substantial content element
+                                    for i in range(content_count):
+                                        content_element = content_elements.nth(i)
+                                        text = await content_element.inner_text()
+                                        
+                                        if text and len(text.strip()) > 10 and not self._is_ui_element(text):
+                                            cleaned_text = self._clean_ai_response_text(text)
+                                            if cleaned_text and len(cleaned_text.strip()) > 10:
+                                                logger.debug(f"Found AI response in message box: {cleaned_text[:50]}...")
+                                                return cleaned_text
+                            except Exception as e:
+                                logger.debug(f"Error with content selector {content_selector}: {e}")
+                                continue
+                                
+                    except Exception as e:
+                        logger.debug(f"Error extracting content from message box: {e}")
                         
-                        if cleaned_text and len(cleaned_text.strip()) > 10 and not self._is_ui_element(cleaned_text):
-                            logger.debug(f"Found AI response with selector: {selector}")
-                            return cleaned_text
-                except Exception as e:
-                    logger.debug(f"Error with AI response selector {selector}: {e}")
-                    continue
+                        # Fallback: get all text from the message box
+                        try:
+                            full_text = await last_ai_box.inner_text()
+                            if full_text and len(full_text.strip()) > 10:
+                                cleaned_text = self._clean_ai_response_text(full_text)
+                                if cleaned_text and len(cleaned_text.strip()) > 10:
+                                    logger.debug(f"Found AI response from full message box: {cleaned_text[:50]}...")
+                                    return cleaned_text
+                        except Exception as e:
+                            logger.debug(f"Error getting full text from message box: {e}")
+                
+            except Exception as e:
+                logger.debug(f"Error in message box response detection: {e}")
             
             # Strategy 3: Fallback - look for response patterns in page content
             try:
@@ -481,33 +497,18 @@ class PortalInterface:
         messages = []
         
         try:
-            # Strategy 1: Look for conversation pairs (user + AI response)
-            conversation_selectors = [
-                # Look for containers that hold conversation pairs
-                'div:has-text("AP"):has-text("Andreas Pils")',  # User message containers
-                'div:has-text("AI"):has-text("Claude")',  # AI message containers
-            ]
-            
-            for selector in conversation_selectors:
-                try:
-                    elements = self.page.locator(selector)
-                    count = await elements.count()
-                    
-                    for i in range(count):
-                        element = elements.nth(i)
+            # Strategy 1: Look for saf-message-box elements (most reliable)
+            try:
+                # Get user message boxes
+                user_message_boxes = self.page.locator('saf-message-box[appearance="user"]')
+                user_count = await user_message_boxes.count()
+                
+                for i in range(user_count):
+                    try:
+                        element = user_message_boxes.nth(i)
                         text = await element.inner_text()
                         
                         if text and len(text.strip()) > 5:
-                            # Determine message type based on content
-                            msg_type = 'unknown'
-                            is_user = ('AP' in text and 'Andreas Pils' in text) or self._is_user_message(text)
-                            is_ai = ('AI' in text and 'Claude' in text) or 'Claude 4 Sonnet' in text
-                            
-                            if is_user:
-                                msg_type = 'user'
-                            elif is_ai:
-                                msg_type = 'ai'
-                            
                             # Get position for ordering
                             try:
                                 position = await element.bounding_box()
@@ -515,7 +516,7 @@ class PortalInterface:
                             except:
                                 y_pos = 0
                             
-                            # Check for timestamp indicators to determine recency
+                            # Check for timestamp indicators
                             timestamp_score = 0
                             if 'just now' in text:
                                 timestamp_score = 1000  # Most recent
@@ -524,22 +525,61 @@ class PortalInterface:
                             
                             messages.append({
                                 'text': text,
-                                'type': msg_type,
+                                'type': 'user',
                                 'position': y_pos,
-                                'selector': selector,
+                                'selector': 'saf-message-box[appearance="user"]',
                                 'timestamp_score': timestamp_score
                             })
                             
-                except Exception as e:
-                    logger.debug(f"Error getting messages with selector {selector}: {e}")
-                    continue
+                    except Exception as e:
+                        logger.debug(f"Error getting user message {i}: {e}")
+                        continue
+                
+                # Get AI message boxes
+                ai_message_boxes = self.page.locator('saf-message-box[appearance="agent"]')
+                ai_count = await ai_message_boxes.count()
+                
+                for i in range(ai_count):
+                    try:
+                        element = ai_message_boxes.nth(i)
+                        text = await element.inner_text()
+                        
+                        if text and len(text.strip()) > 5:
+                            # Get position for ordering
+                            try:
+                                position = await element.bounding_box()
+                                y_pos = position['y'] if position else 0
+                            except:
+                                y_pos = 0
+                            
+                            # Check for timestamp indicators
+                            timestamp_score = 0
+                            if 'just now' in text:
+                                timestamp_score = 1000  # Most recent
+                            elif 'ago' in text:
+                                timestamp_score = 500  # Older
+                            
+                            messages.append({
+                                'text': text,
+                                'type': 'ai',
+                                'position': y_pos,
+                                'selector': 'saf-message-box[appearance="agent"]',
+                                'timestamp_score': timestamp_score
+                            })
+                            
+                    except Exception as e:
+                        logger.debug(f"Error getting AI message {i}: {e}")
+                        continue
+                        
+            except Exception as e:
+                logger.debug(f"Error getting saf-message-box elements: {e}")
             
             # Strategy 2: Fallback to generic message detection
             if len(messages) == 0:
                 fallback_selectors = [
-                    '[class*="message"]',
-                    '[role="article"]',
-                    'div[class*="conversation"] > div',
+                    '.white-pre-wrap',  # User message content
+                    '[data-testid="remark-wrapper"]',  # AI response content
+                    '._copyButton_1owfm_31',  # AI response with copy button
                 ]
                 
                 for selector in fallback_selectors:
@@ -551,12 +591,12 @@ class PortalInterface:
                             element = elements.nth(i)
                             text = await element.inner_text()
                             
-                            if text and len(text.strip()) > 20:  # Only substantial content
+                            if text and len(text.strip()) > 10:  # Only substantial content
                                 # Determine message type
                                 msg_type = 'unknown'
-                                if self._is_user_message(text):
+                                if selector == '.white-pre-wrap' or self._is_user_message(text):
                                     msg_type = 'user'
-                                elif self._is_likely_ai_response(text):
+                                elif selector in ['[data-testid="remark-wrapper"]', '._copyButton_1owfm_31'] or self._is_likely_ai_response(text):
                                     msg_type = 'ai'
                                 
                                 # Get position for ordering
