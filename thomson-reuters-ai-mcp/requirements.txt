@@ -1,4 +1,6 @@
-playwright
-mcp
-python-dotenv
-async-timeout
+playwright>=1.40.0
+mcp>=0.5.0
+asyncio
+python-dotenv>=1.0.0
+click>=8.0.0
+logging

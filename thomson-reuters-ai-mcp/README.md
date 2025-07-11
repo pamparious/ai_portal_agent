@@ -1,71 +1,159 @@
-# Thomson Reuters AI Portal MCP Agent
+# MCP AI Portal Agent
 
-## Overview
-This project provides a Model Context Protocol (MCP) agent that enables command-line access to the Thomson Reuters AI portal, specifically for interacting with Claude Sonnet 4 through browser automation.
+A Python-based MCP (Model Context Protocol) server that enables secure access to Thomson Reuters' AI portal through browser automation.
 
-## Quick Start
+## Features
 
-### Prerequisites
-- Windows 11
-- Python 3.9+
-- Microsoft Edge browser
-- Access to Thomson Reuters AI Portal
+- **Secure Browser Connection**: Connects to existing Edge browser sessions without storing credentials
+- **MCP Protocol Support**: Full MCP server implementation with 4 core tools
+- **CLI Interface**: Command-line interface for VS Code terminal integration
+- **Robust Portal Integration**: Dynamic DOM selectors and retry logic
+- **Configuration Management**: Environment-based configuration
+- **Error Handling**: Custom exception classes and comprehensive logging
 
-### Setup and Installation
+## Installation
 
-1.  **Clone the repository** (if you haven't already):
-    ```bash
-git clone https://github.com/pamparious/ai_portal_agent.git
-    cd thomson-reuters-ai-mcp
-    ```
+1. **Prerequisites**:
+   - Python 3.8+
+   - Microsoft Edge browser
+   - Node.js (for Playwright)
 
-2.  **Set up the Python virtual environment and install dependencies**:
-    Refer to the [scripts.md](scripts.md) file for detailed instructions on setting up the virtual environment and installing all necessary Python packages.
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   playwright install chromium
+   ```
 
-### Running the Agent
+3. **Configure Edge browser**:
+   Start Edge with debugging enabled:
+   ```bash
+   msedge.exe --remote-debugging-port=9222 --user-data-dir=C:\\temp\\edge-debug
+   ```
 
-1.  **Start Microsoft Edge with Remote Debugging Enabled**:
-    It is crucial to launch Microsoft Edge with remote debugging enabled on port 9222. This allows the agent to connect to your existing browser session. Use a command similar to this, replacing the `user-data-dir` with your actual Edge profile path:
-    ```bash
-    "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\%USERNAME%\AppData\Local\Microsoft\Edge\User Data"
-    ```
-    *Note: Ensure you close all existing Edge instances before running this command to guarantee it launches with the specified flags.*
+4. **Environment setup**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
 
-2.  **Start the MCP Server**:
-    Open a new terminal, activate your virtual environment, and run the MCP server:
-    ```bash
-    python -m mcp_server.server
-    ```
-    The server will start and attempt to connect to the running Edge browser.
+## Usage
 
-3.  **Run the Test Agent (or your MCP Client)**:
-    Open another new terminal, activate your virtual environment, and run the provided test agent to send a query to the AI portal:
-    ```bash
-    python test_agent.py
-    ```
-    This script will send a sample query and print the response received from the AI portal via the MCP server.
+### CLI Interface
 
-## Project Structure
+```bash
+# Ask a question
+python -m cli.terminal_interface ask "What are the current market trends?"
 
--   `mcp_server/`: Contains the MCP server implementation and browser automation logic.
-    -   `browser_agent.py`: Handles Playwright browser connection and navigation.
-    -   `server.py`: Implements the MCP protocol and exposes AI portal functionalities as tools.
--   `src/browser/`: Original browser management (now updated to Playwright).
--   `src/portal/`: Handles interactions with the AI portal's DOM.
--   `tests/`: Contains unit and integration tests.
--   `docs/`: Additional documentation files (e.g., `claude.md`, `project.md`, `techstack.md`, `scripts.md`, `architecture.md`).
--   `requirements.txt`: Python dependencies.
--   `test_agent.py`: A simple client to test the MCP server.
+# Check portal status
+python -m cli.terminal_interface status
 
-## Documentation
+# List available AI models
+python -m cli.terminal_interface models
 
--   [Project Overview](project.md)
--   [Technical Stack](techstack.md)
--   [Claude Sonnet 4 Integration](claude.md)
--   [Available Scripts and Commands](scripts.md)
--   [System Architecture](architecture.md)
+# Interactive mode
+python -m cli.terminal_interface interactive
+```
 
-git clone <https://github.com/pamparious/ai_portal_agent.git>
-cd thomson-reuters-ai-mcp
+### MCP Server
 
-Start: "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\%USERNAME%\AppData\Local\Microsoft\Edge\User Data"
+```bash
+# Start MCP server
+python -m mcp_server.server
+```
+
+### Available MCP Tools
+
+1. **ask_ai**: Send queries to the AI portal
+2. **check_portal_status**: Check connection health and authentication
+3. **list_available_models**: Get available AI models
+4. **get_portal_session**: Get current session information
+
+## Configuration
+
+Configure the agent using environment variables or `.env` file:
+
+```env
+# Browser settings
+MCP_BROWSER_DEBUG_PORT=9222
+MCP_BROWSER_TIMEOUT=30000
+
+# Portal settings
+MCP_PORTAL_BASE_URL=https://dataandanalytics.int.thomsonreuters.com
+MCP_PORTAL_RESPONSE_TIMEOUT=30
+
+# Security settings
+MCP_MAX_QUERY_LENGTH=10000
+MCP_ENABLE_INPUT_VALIDATION=true
+```
+
+## Architecture
+
+```
+thomson-reuters-ai-mcp/
+├── mcp_server/
+│   ├── server.py              # MCP protocol implementation
+│   ├── browser_agent.py       # Browser automation
+│   ├── exceptions.py          # Custom exceptions
+│   └── config.py              # Configuration management
+├── src/portal/
+│   └── portal_interface.py    # Portal interaction
+├── cli/
+│   └── terminal_interface.py  # CLI interface
+└── tests/                     # Test suite
+```
+
+## Development
+
+### Running Tests
+
+```bash
+python -m pytest tests/
+```
+
+### Debug Mode
+
+```bash
+MCP_LOG_LEVEL=DEBUG python -m cli.terminal_interface ask "test question"
+```
+
+## Security
+
+- **No Credential Storage**: Uses existing browser sessions
+- **Input Validation**: Sanitizes all inputs and responses
+- **Domain Restrictions**: Configured allowed domains
+- **Audit Logging**: Comprehensive logging for compliance
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Browser Connection Failed**:
+   - Ensure Edge is running with `--remote-debugging-port=9222`
+   - Check firewall settings
+   - Verify port 9222 is not in use
+
+2. **Authentication Required**:
+   - Log in to Thomson Reuters portal manually
+   - Verify session is active
+
+3. **Portal UI Changed**:
+   - DOM selectors may need updates
+   - Check debug screenshots for UI changes
+
+4. **Timeout Issues**:
+   - Increase `MCP_PORTAL_RESPONSE_TIMEOUT`
+   - Check network connectivity
+
+### Debug Features
+
+- **Screenshots**: Automatic screenshots on errors
+- **Verbose Logging**: Set `MCP_LOG_LEVEL=DEBUG`
+- **Health Checks**: Built-in connection monitoring
+
+## License
+
+Thomson Reuters Internal Use Only
+
+## Support
+
+For issues and questions, contact the Thomson Reuters AI Platform team.

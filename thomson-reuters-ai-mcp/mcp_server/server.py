@@ -68,14 +68,29 @@ class MCPServer(Server):
             raise
 
     async def start(self):
-        await self.browser_agent.connect_to_browser(self.playwright_instance)
-        logger.info("MCP Server started and browser connected.")
+        """Start the MCP server and connect to browser"""
+        try:
+            await self.browser_agent.connect_to_browser(self.playwright_instance)
+            logger.info("MCP Server started and browser connected successfully")
+        except BrowserConnectionError as e:
+            logger.error(f"Failed to start MCP server: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error starting MCP server: {e}")
+            raise
 
     async def stop(self):
-        if self.browser_agent:
-            await self.browser_agent.close()
-        if self.playwright_instance:
-            await self.playwright_instance.stop()
+        """Stop the MCP server and clean up resources"""
+        logger.info("Stopping MCP server...")
+        try:
+            if self.browser_agent:
+                await self.browser_agent.close()
+            if self.playwright_instance:
+                await self.playwright_instance.stop()
+            logger.info("MCP server stopped successfully")
+        except Exception as e:
+            logger.error(f"Error stopping MCP server: {e}")
+            raise
 
 
 def main_docstring():
@@ -85,12 +100,31 @@ def main_docstring():
 
 async def main():
     """Entry point for the MCP server. Ensures graceful shutdown."""
+    logger.info("Starting MCP AI Portal Agent server...")
+    
     async with async_playwright() as playwright_instance:
         server = MCPServer(playwright_instance)
         try:
             await server.start()
+            logger.info("MCP server is ready to accept connections")
+            
             async with stdio_server() as (read_stream, write_stream):
                 initialization_options = server.create_initialization_options()
                 await server.run(read_stream, write_stream, initialization_options)
+        except KeyboardInterrupt:
+            logger.info("Received interrupt signal, shutting down gracefully...")
+        except Exception as e:
+            logger.error(f"Server error: {e}")
+            raise
         finally:
             await server.stop()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("MCP server stopped by user")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        sys.exit(1)
