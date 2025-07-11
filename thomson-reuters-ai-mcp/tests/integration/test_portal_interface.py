@@ -1,25 +1,48 @@
+import pytest
 import asyncio
-from src.browser.edge_browser_manager import EdgeBrowserManager
+from playwright.async_api import async_playwright
+from mcp_server.browser_agent import BrowserAgent
 from src.portal.portal_interface import PortalInterface
+from pytest_asyncio import fixture as async_fixture
 
-async def main():
-    browser_manager = EdgeBrowserManager()
+@async_fixture(scope="function")
+async def browser_agent_instance():
+    """Fixture to provide a connected BrowserAgent instance."""
+    agent = BrowserAgent()
+    playwright_instance = await async_playwright().start()
     try:
-        await browser_manager.connect_to_existing_browser()
-        await browser_manager.navigate_to_portal('https://dataandanalytics.int.thomsonreuters.com/ai-platform/ai-experiences/use/27bb41d4-140b-4f8d-9179-bc57f3efbd62')
-        await asyncio.sleep(5) # Add a 5-second delay
-
-        portal_interface = PortalInterface(browser_manager.page)
-
-        await portal_interface.take_screenshot("portal_screenshot.png")
-
-        # Test placeholder methods
-        print("\n--- Testing PortalInterface methods ---")
-        chat_detected = await portal_interface.detect_chat_interface()
-        print(f"Chat interface detected: {chat_detected}")
-
+        await agent.connect_to_browser(playwright_instance)
+        yield agent
     finally:
-        await browser_manager.close_browser()
+        await agent.close()
+        await playwright_instance.stop()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+@pytest.mark.asyncio
+async def test_portal_interface_functionality(browser_agent_instance):
+    """
+    Tests the basic functionality of the PortalInterface.
+    This test assumes a browser is connected and navigated to the AI portal.
+    """
+    portal_interface = PortalInterface(browser_agent_instance.page)
+
+    # Test detect_chat_interface
+    chat_detected = await portal_interface.detect_chat_interface()
+    assert chat_detected is True, "Chat interface should be detected"
+
+    # Test send_message and wait_for_response
+    test_query = "Hello, AI!"
+    await portal_interface.send_message(test_query)
+    response = await portal_interface.wait_for_response()
+    assert "response" in response.lower(), "AI should provide a response"
+
+    # Test take_screenshot
+    screenshot_path = "test_portal_screenshot.png"
+    await portal_interface.take_screenshot(screenshot_path)
+    # You might want to add a check here to ensure the file exists
+    # For now, just ensure no exception is raised
+    import os
+    assert os.path.exists(screenshot_path)
+
+    print(f"Test query: {test_query}")
+    print(f"AI response: {response}")
+    print(f"Screenshot saved to: {screenshot_path}")

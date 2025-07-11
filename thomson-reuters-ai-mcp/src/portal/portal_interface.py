@@ -45,25 +45,15 @@ class PortalInterface:
         Implements retry logic.
         """
         print("Waiting for response...")
-        start_time = asyncio.get_event_loop().time()
-        response_selector = '.message-bubble.from-ai' # This selector needs to be confirmed
-        
-        while asyncio.get_event_loop().time() - start_time < timeout:
-            try:
-                # Wait for at least one response bubble to appear
-                await self.page.locator(response_selector).first.wait_for(state='visible', timeout=5000) # Short timeout for polling
-                
-                # Get all response elements and retrieve the text of the last one
-                response_elements = await self.page.locator(response_selector).all_text_contents()
-                if response_elements:
-                    last_response_text = response_elements[-1].strip()
-                    if last_response_text:
-                        print("Response received.")
-                        return last_response_text
-            except Exception:
-                pass # Continue waiting if element not found yet
-            await asyncio.sleep(1) # Check every second
-        raise TimeoutError("AI response not received within timeout.")
+        ai_response_paragraph = self.page.locator("saf-message-box[appearance='agent'] div[data-testid='remark-wrapper'] p").last
+        await ai_response_paragraph.wait_for(state='visible', timeout=timeout * 1000)
+        response_text = await ai_response_paragraph.inner_text()
+        response_text = response_text.strip()
+        if response_text:
+            print("Response received.")
+            return response_text
+        else:
+            raise TimeoutError("No AI response found within timeout.")
 
     async def take_screenshot(self, path: str = "screenshot.png") -> None:
         """

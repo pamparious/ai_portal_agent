@@ -1,18 +1,31 @@
+import pytest
 import asyncio
-from src.browser.edge_browser_manager import EdgeBrowserManager
+from playwright.async_api import async_playwright
+from mcp_server.browser_agent import BrowserAgent
+from src.portal.portal_interface import PortalInterface
+from pytest_asyncio import fixture as async_fixture
 
-async def main():
-    
-
-    browser_manager = EdgeBrowserManager()
+@async_fixture(scope="function")
+async def browser_agent_instance():
+    """Fixture to provide a connected BrowserAgent instance."""
+    agent = BrowserAgent()
+    playwright_instance = await async_playwright().start()
     try:
-        await browser_manager.connect_to_existing_browser()
-        await browser_manager.navigate_to_portal('https://dataandanalytics.int.thomsonreuters.com/ai-platform/ai-experiences/use/27bb41d4-140b-4f8d-9179-bc57f3efbd62')
-        await asyncio.sleep(3) # Add a 3-second delay
-        is_logged_in = await browser_manager.check_login_status()
-        print(f'Login status: {is_logged_in}')
+        await agent.connect_to_browser(playwright_instance)
+        yield agent
     finally:
-        await browser_manager.close_browser()
+        await agent.close()
+        await playwright_instance.stop()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+@pytest.mark.asyncio
+async def test_login_and_chat_interface(browser_agent_instance):
+    """
+    Tests the login status and chat interface detection.
+    """
+    portal_interface = PortalInterface(browser_agent_instance.page)
+
+    # Check if the chat interface is detected (implies successful navigation and potentially login)
+    chat_detected = await portal_interface.detect_chat_interface()
+    assert chat_detected is True, "Chat interface should be detected after navigation and login."
+
+    print(f"Chat interface detected: {chat_detected}")

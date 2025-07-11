@@ -8,6 +8,8 @@ class BrowserAgent:
     def __init__(self):
         self.browser: Browser = None
         self.page: Page = None
+        self.portal_interface: PortalInterface = None
+        self.playwright_instance = None
 
     async def connect_to_browser(self, playwright_instance):
         logger.info("Connecting to existing Edge browser session...")
@@ -40,31 +42,13 @@ class BrowserAgent:
 
         logger.info(f"Asking AI: {query}")
         try:
-            logger.info("Locating chat input field...")
-            chat_input = self.page.locator("textarea[placeholder='Type your message']")
-            await expect(chat_input).to_be_visible(timeout=10000)
-            logger.info("Filling chat input field...")
-            await chat_input.fill(query)
-            
-            logger.info("Locating send button...")
-            send_button = self.page.locator("saf-button[data-testid='chat-send-btn']")
-            await expect(send_button).to_be_visible(timeout=5000)
-            logger.info("Clicking send button...")
-            await send_button.click()
-
-            logger.info("Waiting for AI response paragraph...")
-            ai_response_paragraph = self.page.locator("saf-message-box[appearance='agent'] div[data-testid='remark-wrapper'] p").last
-            await expect(ai_response_paragraph).to_be_visible(timeout=60000)
-            logger.info("AI response paragraph visible. Extracting text...")
-            
-            response_text = await ai_response_paragraph.inner_text()
-            response_text = response_text.strip()
-            if response_text:
-                logger.info(f"Received AI response: {response_text}")
-                return response_text
-            else:
-                logger.warning("No AI response found.")
-                return "No response received."
+            await self.portal_interface.send_message(query)
+            response_text = await self.portal_interface.wait_for_response()
+            logger.info(f"Received AI response: {response_text}")
+            return response_text
+        except Exception as e:
+            logger.error(f"Error during AI interaction: {e}")
+            return f"Error: {e}"
 
         except Exception as e:
             logger.error(f"Error during AI interaction: {e}")
