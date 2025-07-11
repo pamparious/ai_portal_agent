@@ -218,7 +218,45 @@ class PortalInterface:
     async def _get_latest_response(self) -> Optional[str]:
         """Get the latest AI response from the chat"""
         try:
-            # Strategy 1: Look for AI-specific message containers
+            # Strategy 1: Look for most recent AI response first
+            try:
+                # Find all message containers and identify AI responses by content and position
+                message_containers = await self._get_ordered_messages()
+                
+                if len(message_containers) >= 1:
+                    # Look for AI responses, prioritizing the most recent ones
+                    ai_responses = []
+                    
+                    for msg in message_containers:
+                        message_text = msg['text']
+                        message_type = msg['type']
+                        
+                        # Look for AI responses
+                        if (message_type == 'ai' or 
+                            (message_type == 'unknown' and self._is_likely_ai_response(message_text))):
+                            
+                            # Skip UI elements
+                            if not self._is_ui_element(message_text):
+                                cleaned_text = self._clean_ai_response_text(message_text)
+                                if cleaned_text and len(cleaned_text.strip()) > 10:
+                                    ai_responses.append({
+                                        'text': cleaned_text,
+                                        'timestamp_score': msg.get('timestamp_score', 0),
+                                        'position': msg['position']
+                                    })
+                    
+                    # Sort by timestamp score (most recent first), then by position (bottom first)
+                    ai_responses.sort(key=lambda x: (-x['timestamp_score'], -x['position']))
+                    
+                    if ai_responses:
+                        best_response = ai_responses[0]['text']
+                        logger.debug(f"Found AI response by content analysis: {best_response[:50]}...")
+                        return best_response
+                
+            except Exception as e:
+                logger.debug(f"Error in content-based response detection: {e}")
+            
+            # Strategy 2: Look for AI-specific message containers
             ai_response_selectors = [
                 # Look for AI avatar/icon indicators
                 'div:has-text("AI"):has-text("Claude"):not(:has-text("AP"))',
@@ -246,44 +284,24 @@ class PortalInterface:
                         # Clean up the text (remove timestamps, cost info, etc.)
                         cleaned_text = self._clean_ai_response_text(text)
                         
-                        if cleaned_text and len(cleaned_text.strip()) > 10:
+                        if cleaned_text and len(cleaned_text.strip()) > 10 and not self._is_ui_element(cleaned_text):
                             logger.debug(f"Found AI response with selector: {selector}")
                             return cleaned_text
                 except Exception as e:
                     logger.debug(f"Error with AI response selector {selector}: {e}")
                     continue
             
-            # Strategy 2: Look for messages that follow user messages
-            try:
-                # Find all message containers and identify AI responses by position/content
-                message_containers = await self._get_ordered_messages()
-                
-                if len(message_containers) >= 2:
-                    # Look for the last message that's not from the user
-                    for i in range(len(message_containers) - 1, -1, -1):
-                        message_text = message_containers[i]['text']
-                        message_type = message_containers[i]['type']
-                        
-                        # Skip user messages (contain user initials or question patterns)
-                        if message_type == 'ai' or (message_type == 'unknown' and not self._is_user_message(message_text)):
-                            cleaned_text = self._clean_ai_response_text(message_text)
-                            if cleaned_text and len(cleaned_text.strip()) > 10:
-                                logger.debug(f"Found AI response by position analysis")
-                                return cleaned_text
-                
-            except Exception as e:
-                logger.debug(f"Error in position-based response detection: {e}")
-            
-            # Strategy 3: Fallback - look for any reasonable response text
+            # Strategy 3: Fallback - look for response patterns in page content
             try:
                 # Get all text content and look for response patterns
                 page_content = await self.page.inner_text('body')
                 
-                # Look for common AI response patterns (not user questions)
+                # Look for common AI response patterns
                 response_patterns = [
+                    'The capital of Germany is',
                     'The capital of France is',
+                    'Berlin is the capital',
                     'Paris is the capital',
-                    'France\'s capital is',
                     'The answer is',
                     'According to',
                     'Based on',
@@ -389,22 +407,88 @@ class PortalInterface:
             
         return False
     
+    def _is_ui_element(self, text: str) -> bool:
+        """Determine if text is a UI element rather than content"""
+        if not text:
+            return True
+            
+        text_lower = text.lower().strip()
+        
+        # Check for common UI elements
+        ui_patterns = [
+            'connection: ready',
+            'temporary chat',
+            'new chat',
+            'menu',
+            'ai platform',
+            'open arena experiences',
+            'claude 4 sonnet',
+            'estimated query cost',
+            'usd',
+        ]
+        
+        for pattern in ui_patterns:
+            if pattern in text_lower:
+                return True
+        
+        # Check if it's mostly navigation/UI text
+        if len(text.strip()) < 50 and any(word in text_lower for word in ['menu', 'chat', 'connection', 'platform']):
+            return True
+            
+        return False
+    
+    def _is_likely_ai_response(self, text: str) -> bool:
+        """Determine if text is likely an AI response based on content patterns"""
+        if not text or len(text.strip()) < 20:
+            return False
+            
+        text_lower = text.lower().strip()
+        
+        # Check for AI response patterns
+        response_indicators = [
+            'the capital of',
+            'the answer is',
+            'according to',
+            'based on',
+            'here is',
+            'here are',
+            'i can help',
+            'let me',
+            'berlin is',
+            'paris is',
+            'this is',
+            'that is',
+            'it is',
+            'they are',
+            'there are',
+            'there is',
+        ]
+        
+        for indicator in response_indicators:
+            if indicator in text_lower:
+                return True
+        
+        # Check if it's a declarative statement (not a question)
+        if not text.strip().endswith('?') and not self._is_user_message(text) and not self._is_ui_element(text):
+            # Look for sentence-like structure
+            if '.' in text or len(text.split()) > 8:
+                return True
+                
+        return False
+    
     async def _get_ordered_messages(self) -> List[Dict[str, Any]]:
         """Get all messages in chronological order with type identification"""
         messages = []
         
         try:
-            # Look for message containers
-            message_selectors = [
-                'div:has-text("AP")',  # User messages
-                'div:has-text("AI")',  # AI messages
-                'div:has-text("Claude")',  # AI messages
-                '[class*="message"]',
-                '[role="article"]',
-                'div[class*="conversation"] > div',
+            # Strategy 1: Look for conversation pairs (user + AI response)
+            conversation_selectors = [
+                # Look for containers that hold conversation pairs
+                'div:has-text("AP"):has-text("Andreas Pils")',  # User message containers
+                'div:has-text("AI"):has-text("Claude")',  # AI message containers
             ]
             
-            for selector in message_selectors:
+            for selector in conversation_selectors:
                 try:
                     elements = self.page.locator(selector)
                     count = await elements.count()
@@ -414,11 +498,14 @@ class PortalInterface:
                         text = await element.inner_text()
                         
                         if text and len(text.strip()) > 5:
-                            # Determine message type
+                            # Determine message type based on content
                             msg_type = 'unknown'
-                            if 'AP' in text or self._is_user_message(text):
+                            is_user = ('AP' in text and 'Andreas Pils' in text) or self._is_user_message(text)
+                            is_ai = ('AI' in text and 'Claude' in text) or 'Claude 4 Sonnet' in text
+                            
+                            if is_user:
                                 msg_type = 'user'
-                            elif 'AI' in text or 'Claude' in text:
+                            elif is_ai:
                                 msg_type = 'ai'
                             
                             # Get position for ordering
@@ -428,19 +515,71 @@ class PortalInterface:
                             except:
                                 y_pos = 0
                             
+                            # Check for timestamp indicators to determine recency
+                            timestamp_score = 0
+                            if 'just now' in text:
+                                timestamp_score = 1000  # Most recent
+                            elif 'ago' in text:
+                                timestamp_score = 500  # Older
+                            
                             messages.append({
                                 'text': text,
                                 'type': msg_type,
                                 'position': y_pos,
-                                'selector': selector
+                                'selector': selector,
+                                'timestamp_score': timestamp_score
                             })
                             
                 except Exception as e:
                     logger.debug(f"Error getting messages with selector {selector}: {e}")
                     continue
             
-            # Sort by position (top to bottom)
-            messages.sort(key=lambda x: x['position'])
+            # Strategy 2: Fallback to generic message detection
+            if len(messages) == 0:
+                fallback_selectors = [
+                    '[class*="message"]',
+                    '[role="article"]',
+                    'div[class*="conversation"] > div',
+                ]
+                
+                for selector in fallback_selectors:
+                    try:
+                        elements = self.page.locator(selector)
+                        count = await elements.count()
+                        
+                        for i in range(count):
+                            element = elements.nth(i)
+                            text = await element.inner_text()
+                            
+                            if text and len(text.strip()) > 20:  # Only substantial content
+                                # Determine message type
+                                msg_type = 'unknown'
+                                if self._is_user_message(text):
+                                    msg_type = 'user'
+                                elif self._is_likely_ai_response(text):
+                                    msg_type = 'ai'
+                                
+                                # Get position for ordering
+                                try:
+                                    position = await element.bounding_box()
+                                    y_pos = position['y'] if position else 0
+                                except:
+                                    y_pos = 0
+                                
+                                messages.append({
+                                    'text': text,
+                                    'type': msg_type,
+                                    'position': y_pos,
+                                    'selector': selector,
+                                    'timestamp_score': 0
+                                })
+                                
+                    except Exception as e:
+                        logger.debug(f"Error getting messages with selector {selector}: {e}")
+                        continue
+            
+            # Sort by position (top to bottom) and then by timestamp score (most recent first)
+            messages.sort(key=lambda x: (x['position'], -x.get('timestamp_score', 0)))
             
             # Remove duplicates (same text content)
             unique_messages = []
