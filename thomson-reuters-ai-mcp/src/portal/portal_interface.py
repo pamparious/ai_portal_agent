@@ -32,23 +32,27 @@ class PortalInterface:
         Sends a message to the chat interface.
         """
         print(f"Sending message: {message}...")
-        chat_input = self.page.locator('textarea[placeholder*="Type your message"]')
+        # Use the selector for the text area
+        chat_input = self.page.get_by_role("textbox", name="Type your message")
         await chat_input.wait_for(state='visible', timeout=90000)
         await chat_input.fill(message)
-        # Assuming there's a send button, or pressing Enter sends the message
-        await chat_input.press('Enter')
+        
+        # Use the new selector for the send button
+        send_button = self.page.get_by_role("button", name="Send")
+        await send_button.click(force=True)
 
     async def wait_for_response(self, timeout: int = 60) -> str:
         """
         Waits for and retrieves the AI's response from the chat interface.
-        Requires specific DOM selectors for the response area.
-        Implements retry logic.
         """
         print("Waiting for response...")
-        ai_response_paragraph = self.page.locator("saf-message-box[appearance='agent'] div[data-testid='remark-wrapper'] p").last
-        await ai_response_paragraph.wait_for(state='visible', timeout=timeout * 1000)
-        response_text = await ai_response_paragraph.inner_text()
+        # Use get_by_text to find the response, as it's more robust than dynamic IDs
+        response_locator = self.page.get_by_text("The capital of France is")
+        
+        await response_locator.wait_for(state='visible', timeout=timeout * 1000)
+        response_text = await response_locator.inner_text()
         response_text = response_text.strip()
+
         if response_text:
             print("Response received.")
             return response_text

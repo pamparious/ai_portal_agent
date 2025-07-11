@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from playwright.async_api import Browser, Page, expect, async_playwright
+from src.portal.portal_interface import PortalInterface
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class BrowserAgent:
             
             # Get the first page
             self.page = self.browser.contexts[0].pages[0]
+            self.portal_interface = PortalInterface(self.page)
             logger.info(f"Connected to browser. Current URL: {self.page.url}")
             
             # Navigate to the AI portal if not already there
@@ -46,10 +48,6 @@ class BrowserAgent:
             response_text = await self.portal_interface.wait_for_response()
             logger.info(f"Received AI response: {response_text}")
             return response_text
-        except Exception as e:
-            logger.error(f"Error during AI interaction: {e}")
-            return f"Error: {e}"
-
         except Exception as e:
             logger.error(f"Error during AI interaction: {e}")
             return f"Error: {e}"

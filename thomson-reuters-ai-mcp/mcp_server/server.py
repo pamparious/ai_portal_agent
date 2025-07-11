@@ -2,6 +2,12 @@ import asyncio
 import importlib.metadata
 import logging
 import sys
+import os
+
+# Add the project root to the Python path if not already present
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 import anyio
 from playwright.async_api import async_playwright
@@ -30,6 +36,23 @@ class MCPServer(Server):
             input_schema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
             output_schema={"type": "object", "properties": {"response": {"type": "string"}}},
         )
+
+        self.add_tool(
+            "test_browser_connection",
+            self._test_browser_connection_tool,
+            input_schema={"type": "object", "properties": {}},
+            output_schema={"type": "object", "properties": {"page_title": {"type": "string"}}},
+        )
+
+    async def _test_browser_connection_tool(self, tool_name: str, arguments: dict) -> dict:
+        logger.info("test_browser_connection_tool invoked")
+        try:
+            title = await self.browser_agent.page.title()
+            logger.info(f"Successfully retrieved page title: {title}")
+            return {"page_title": title}
+        except Exception as e:
+            logger.error(f"Error in test_browser_connection_tool: {e}")
+            raise
 
     async def _ask_ai_tool(self, tool_name: str, arguments: dict) -> dict:
         query = arguments.get("query")
