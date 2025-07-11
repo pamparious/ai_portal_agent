@@ -158,10 +158,19 @@ logger.info('Portal query initiated', {
 - Edge browser with debugging enabled
 
 ### Browser Configuration
-Edge must be started with debugging enabled:
+Edge must be started with debugging enabled (preserves login data):
 ```bash
-msedge.exe --remote-debugging-port=9222 --user-data-dir=C:\temp\edge-debug
+# Windows Command Prompt
+"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
+
+# PowerShell
+& "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
+
+# Alternative location (newer installs)
+"C:\Program Files\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
 ```
+
+**Important**: Do NOT use `--user-data-dir` parameter as this would create a new profile without your Thomson Reuters login data. The default profile preserves all authentication and login sessions.
 
 ### VS Code Integration
 - **Tasks configuration** for build and run commands

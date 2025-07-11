@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class BrowserConfig:
     """Browser configuration settings"""
     debug_port: int = 9222
-    user_data_dir: str = "C:\\temp\\edge-debug"
+    user_data_dir: str = ""  # Empty to use default profile with login data
     timeout: int = 30000
     headless: bool = False
     slow_mo: int = 0
@@ -78,7 +78,10 @@ class Config:
         """Load configuration from environment variables"""
         # Browser configuration
         self.browser.debug_port = int(os.getenv('MCP_BROWSER_DEBUG_PORT', self.browser.debug_port))
-        self.browser.user_data_dir = os.getenv('MCP_BROWSER_USER_DATA_DIR', self.browser.user_data_dir)
+        # Only set user_data_dir if explicitly provided to preserve default profile
+        user_data_dir_env = os.getenv('MCP_BROWSER_USER_DATA_DIR')
+        if user_data_dir_env:
+            self.browser.user_data_dir = user_data_dir_env
         self.browser.timeout = int(os.getenv('MCP_BROWSER_TIMEOUT', self.browser.timeout))
         self.browser.headless = os.getenv('MCP_BROWSER_HEADLESS', 'false').lower() == 'true'
         self.browser.slow_mo = int(os.getenv('MCP_BROWSER_SLOW_MO', self.browser.slow_mo))

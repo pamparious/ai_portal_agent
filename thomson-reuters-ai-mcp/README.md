@@ -25,10 +25,30 @@ A Python-based MCP (Model Context Protocol) server that enables secure access to
    ```
 
 3. **Configure Edge browser**:
-   Start Edge with debugging enabled:
+   Start Edge with debugging enabled (preserves your login data):
+   
+   **Option A: Use the provided scripts (Recommended)**
    ```bash
-   msedge.exe --remote-debugging-port=9222 --user-data-dir=C:\\temp\\edge-debug
+   # Windows Command Prompt
+   start-edge-debug.bat
+   
+   # PowerShell
+   .\start-edge-debug.ps1
    ```
+   
+   **Option B: Manual command (preserves existing profile)**
+   ```bash
+   # Windows Command Prompt
+   "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
+   
+   # PowerShell
+   & "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
+   
+   # Alternative location (newer installs)
+   "C:\Program Files\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
+   ```
+   
+   **⚠️ Important**: Do NOT use `--user-data-dir` parameter as this would create a new profile without your Thomson Reuters login data.
 
 4. **Environment setup**:
    ```bash
@@ -118,23 +138,28 @@ MCP_LOG_LEVEL=DEBUG python -m cli.terminal_interface ask "test question"
 
 ## Security
 
-- **No Credential Storage**: Uses existing browser sessions
+- **No Credential Storage**: Uses existing browser sessions and login data
+- **Profile Preservation**: Uses default Edge profile to maintain Thomson Reuters authentication
 - **Input Validation**: Sanitizes all inputs and responses
 - **Domain Restrictions**: Configured allowed domains
 - **Audit Logging**: Comprehensive logging for compliance
+- **Session Management**: Automatically detects and uses existing login sessions
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **Browser Connection Failed**:
-   - Ensure Edge is running with `--remote-debugging-port=9222`
-   - Check firewall settings
-   - Verify port 9222 is not in use
+   - Ensure Edge is running with the correct command (see installation section)
+   - Check firewall settings - port 9222 must be accessible
+   - Verify port 9222 is not in use by another application
+   - Try different Edge installation paths if needed
 
 2. **Authentication Required**:
-   - Log in to Thomson Reuters portal manually
-   - Verify session is active
+   - Ensure you're using the default Edge profile (no `--user-data-dir` parameter)
+   - Log in to Thomson Reuters portal manually in your regular Edge browser
+   - Verify session is active before starting the agent
+   - If using helper scripts, they automatically preserve your login data
 
 3. **Portal UI Changed**:
    - DOM selectors may need updates
