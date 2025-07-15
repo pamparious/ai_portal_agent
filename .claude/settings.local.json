@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "WebFetch(domain:modelcontextprotocol.io)",
+      "Bash(pip show:*)",
+      "Bash(copy:*)",
+      "Bash(cp:*)",
+      "Bash(del debug_*.py debug_*.png final_validation_test.py test_*.py test_*.png nul)",
+      "Bash(rm:*)",
+      "Bash(find:*)",
+      "Bash(true)"
+    ],
+    "deny": []
+  }
+}

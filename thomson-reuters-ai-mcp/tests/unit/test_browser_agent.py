@@ -1,9 +1,17 @@
 import pytest
 import asyncio
+import sys
+import os
 from playwright.async_api import async_playwright
-from ...mcp_server.browser_agent import BrowserAgent
-from ...src.portal.portal_interface import PortalInterface
 from pytest_asyncio import fixture as async_fixture
+
+# Add the project root to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from mcp_server.browser_agent import BrowserAgent
+from src.portal.portal_interface import PortalInterface
 
 @async_fixture(scope="function")
 async def browser_agent_instance():

@@ -1,8 +1,17 @@
 import asyncio
 import logging
 import time
+import sys
+import os
 from typing import Optional, List, Dict, Any
 from playwright.async_api import Page
+
+# Add the project root to the Python path for importing exceptions
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from mcp_server.exceptions import TimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -11,16 +20,27 @@ class PortalInterface:
     def __init__(self, page: Page):
         self.page = page
         self.response_selectors = [
-            # Multiple selectors for different response types
+            # SAF-based selectors (Thomson Reuters UI framework)
+            'saf-message-box[appearance="agent"] [data-testid="remark-wrapper"]',
+            'saf-message-box[appearance="agent"]',
+            'saf-chat-message[type="response"]',
+            'saf-response-content',
+            
+            # Standard selectors
             '[data-testid="message-content"]',
+            '[data-testid="remark-wrapper"]',
             '.message-content',
             '[class*="response"]',
             '[class*="message"]',
             'div[role="article"]',
-            # Fallback selectors
-            'div:has-text("The capital of France")',
-            'div:has-text("Paris")',
-            'p:has-text("capital")',
+            
+            # Generic text-based selectors
+            '*:has-text("The answer")',
+            '*:has-text("equals")',
+            '*:has-text("is 4")',
+            '*:has-text("2+2")',
+            'div:has-text("4")',
+            'p:has-text("4")',
         ]
         self.chat_input_selectors = [
             'textarea[placeholder*="Type your message"]',
@@ -32,14 +52,24 @@ class PortalInterface:
             'input[type="text"]'
         ]
         self.send_button_selectors = [
+            # SAF-based send button selectors
+            'saf-button[aria-label*="Send"]',
             'button[aria-label*="Send"]',
+            'saf-icon-button[aria-label*="Send"]',
+            
+            # Generic send button selectors
             'button:has-text("Send")',
             'button[type="submit"]',
             '[data-testid="send-button"]',
             'button:has([class*="send"])',
             'button:has([class*="submit"])',
             'button[title*="Send"]',
+            
+            # Icon-based selectors (for buttons with only icons)
+            'button:has(saf-icon[icon-name*="arrow"])',
+            'button:has(saf-icon[icon-name*="send"])',
             'button svg[class*="send"]',
+            'button:has([class*="arrow"])',
         ]
 
     async def detect_chat_interface(self) -> bool:
@@ -119,9 +149,30 @@ class PortalInterface:
             try:
                 send_button = self.page.locator(selector)
                 if await send_button.count() > 0:
-                    await send_button.first.click(force=True)
-                    logger.info(f"Send button clicked with selector: {selector}")
-                    return
+                    # Try multiple click methods to handle overlapping elements
+                    try:
+                        await send_button.first.click(force=True, timeout=5000)
+                        logger.info(f"Send button clicked with selector: {selector}")
+                        return
+                    except Exception as click_error:
+                        logger.debug(f"Force click failed, trying alternative methods: {click_error}")
+                        
+                        # Try clicking the icon directly if it's intercepting
+                        try:
+                            await send_button.first.click(position={"x": 12, "y": 12}, force=True)
+                            logger.info(f"Send button clicked with position offset: {selector}")
+                            return
+                        except Exception as pos_error:
+                            logger.debug(f"Position click failed: {pos_error}")
+                            
+                            # Try using dispatchEvent
+                            try:
+                                await send_button.first.dispatch_event("click")
+                                logger.info(f"Send button clicked with dispatch event: {selector}")
+                                return
+                            except Exception as dispatch_error:
+                                logger.debug(f"Dispatch event failed: {dispatch_error}")
+                                
             except Exception as e:
                 logger.debug(f"Failed to click send button with selector {selector}: {e}")
                 continue

@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("comprehensive_test")
 
 
-class TestResults:
+class TestResultsHelper:
     """Track test results"""
     def __init__(self):
         self.passed = 0
@@ -40,11 +40,11 @@ class TestResults:
     
     def print_summary(self):
         print("\n" + "="*60)
-        print("🎯 COMPREHENSIVE TEST RESULTS")
+        print("COMPREHENSIVE TEST RESULTS")
         print("="*60)
         
         for result in self.results:
-            status = "✅" if result["passed"] else "❌"
+            status = "[PASS]" if result["passed"] else "[FAIL]"
             print(f"{status} {result['test']}")
             if result["message"]:
                 print(f"   {result['message']}")
@@ -54,12 +54,12 @@ class TestResults:
         print(f"Failed: {self.failed}")
         
         if self.failed == 0:
-            print("🎉 All tests passed!")
+            print("All tests passed!")
         else:
-            print(f"⚠️  {self.failed} tests failed")
+            print(f"{self.failed} tests failed")
 
 
-def test_imports(results: TestResults):
+def test_imports(results: TestResultsHelper):
     """Test all imports work correctly"""
     try:
         from mcp_server.browser_agent import BrowserAgent
@@ -74,7 +74,7 @@ def test_imports(results: TestResults):
         results.add_result("Import Test", False, f"Import failed: {e}")
 
 
-def test_configuration(results: TestResults):
+def test_configuration(results: TestResultsHelper):
     """Test configuration system"""
     try:
         from mcp_server.config import get_config
@@ -93,7 +93,7 @@ def test_configuration(results: TestResults):
         results.add_result("Configuration Test", False, f"Configuration failed: {e}")
 
 
-def test_exceptions(results: TestResults):
+def test_exceptions(results: TestResultsHelper):
     """Test custom exception classes"""
     try:
         from mcp_server.exceptions import (
@@ -112,7 +112,7 @@ def test_exceptions(results: TestResults):
         results.add_result("Exception Test", False, f"Exception test failed: {e}")
 
 
-def test_browser_agent_structure(results: TestResults):
+def test_browser_agent_structure(results: TestResultsHelper):
     """Test browser agent structure without connection"""
     try:
         from mcp_server.browser_agent import BrowserAgent
@@ -133,7 +133,7 @@ def test_browser_agent_structure(results: TestResults):
         results.add_result("Browser Agent Structure", False, f"Structure test failed: {e}")
 
 
-def test_portal_interface_structure(results: TestResults):
+def test_portal_interface_structure(results: TestResultsHelper):
     """Test portal interface structure"""
     try:
         from src.portal.portal_interface import PortalInterface
@@ -164,7 +164,7 @@ def test_portal_interface_structure(results: TestResults):
         results.add_result("Portal Interface Structure", False, f"Structure test failed: {e}")
 
 
-def test_cli_interface_structure(results: TestResults):
+def test_cli_interface_structure(results: TestResultsHelper):
     """Test CLI interface structure"""
     try:
         from cli.terminal_interface import TerminalInterface
@@ -184,7 +184,7 @@ def test_cli_interface_structure(results: TestResults):
         results.add_result("CLI Interface Structure", False, f"Structure test failed: {e}")
 
 
-async def test_mock_browser_operations(results: TestResults):
+async def test_mock_browser_operations(results: TestResultsHelper):
     """Test browser operations with mocked components"""
     try:
         from mcp_server.browser_agent import BrowserAgent
@@ -225,7 +225,7 @@ async def test_mock_browser_operations(results: TestResults):
         results.add_result("Mock Browser Operations", False, f"Mock operations failed: {e}")
 
 
-async def test_configuration_validation(results: TestResults):
+async def test_configuration_validation(results: TestResultsHelper):
     """Test configuration validation"""
     try:
         from mcp_server.config import Config
@@ -255,7 +255,7 @@ async def test_configuration_validation(results: TestResults):
         results.add_result("Configuration Validation", False, f"Configuration validation failed: {e}")
 
 
-def test_error_handling_structure(results: TestResults):
+def test_error_handling_structure(results: TestResultsHelper):
     """Test error handling structure"""
     try:
         from mcp_server.exceptions import ValidationError
@@ -282,38 +282,38 @@ def test_error_handling_structure(results: TestResults):
 
 async def run_all_tests():
     """Run all comprehensive tests"""
-    results = TestResults()
+    results = TestResultsHelper()
     
-    print("🧪 Running Comprehensive MCP AI Portal Agent Tests")
+    print("Running Comprehensive MCP AI Portal Agent Tests")
     print("="*60)
     
     # Run synchronous tests
-    print("\n📋 Testing Imports...")
+    print("\nTesting Imports...")
     test_imports(results)
     
-    print("📋 Testing Configuration...")
+    print("Testing Configuration...")
     test_configuration(results)
     
-    print("📋 Testing Exception Classes...")
+    print("Testing Exception Classes...")
     test_exceptions(results)
     
-    print("📋 Testing Browser Agent Structure...")
+    print("Testing Browser Agent Structure...")
     test_browser_agent_structure(results)
     
-    print("📋 Testing Portal Interface Structure...")
+    print("Testing Portal Interface Structure...")
     test_portal_interface_structure(results)
     
-    print("📋 Testing CLI Interface Structure...")
+    print("Testing CLI Interface Structure...")
     test_cli_interface_structure(results)
     
-    print("📋 Testing Error Handling Structure...")
+    print("Testing Error Handling Structure...")
     test_error_handling_structure(results)
     
     # Run async tests
-    print("\n📋 Testing Mock Browser Operations...")
+    print("\nTesting Mock Browser Operations...")
     await test_mock_browser_operations(results)
     
-    print("📋 Testing Configuration Validation...")
+    print("Testing Configuration Validation...")
     await test_configuration_validation(results)
     
     # Print results
@@ -326,14 +326,14 @@ if __name__ == "__main__":
     try:
         success = asyncio.run(run_all_tests())
         if success:
-            print("\n🎉 All comprehensive tests passed!")
-            print("✅ MCP AI Portal Agent is ready for deployment!")
+            print("\nAll comprehensive tests passed!")
+            print("MCP AI Portal Agent is ready for deployment!")
             sys.exit(0)
         else:
-            print("\n⚠️  Some tests failed. Please check the results above.")
+            print("\nSome tests failed. Please check the results above.")
             sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Test suite failed: {e}")
+        print(f"\nTest suite failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

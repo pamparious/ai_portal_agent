@@ -1,8 +1,9 @@
 import asyncio
-import importlib.metadata
 import logging
 import sys
 import os
+import json
+from typing import List, Dict, Any, Union
 
 # Add the project root to the Python path if not already present
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -16,9 +17,9 @@ import mcp.types as types
 from mcp.server.models import InitializationOptions
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
-from mcp.shared.context import RequestContext
 
 from mcp_server.browser_agent import BrowserAgent
+from mcp_server.exceptions import BrowserConnectionError
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -26,46 +27,135 @@ logger = logging.getLogger("server")
 
 class MCPServer(Server):
     def __init__(self, playwright_instance):
-        super().__init__(name="mcp", version=importlib.metadata.version("mcp"))
+        super().__init__(name="thomson-reuters-ai-mcp", version="1.0.0")
         self.browser_agent = BrowserAgent()
         self.playwright_instance = playwright_instance
-
-        self.add_tool(
-            "ask_ai",
-            self._ask_ai_tool,
-            input_schema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
-            output_schema={"type": "object", "properties": {"response": {"type": "string"}}},
-        )
-
-        self.add_tool(
-            "test_browser_connection",
-            self._test_browser_connection_tool,
-            input_schema={"type": "object", "properties": {}},
-            output_schema={"type": "object", "properties": {"page_title": {"type": "string"}}},
-        )
-
-    async def _test_browser_connection_tool(self, tool_name: str, arguments: dict) -> dict:
-        logger.info("test_browser_connection_tool invoked")
-        try:
-            title = await self.browser_agent.page.title()
-            logger.info(f"Successfully retrieved page title: {title}")
-            return {"page_title": title}
-        except Exception as e:
-            logger.error(f"Error in test_browser_connection_tool: {e}")
-            raise
-
-    async def _ask_ai_tool(self, tool_name: str, arguments: dict) -> dict:
+        
+        # Define tools using the new MCP API
+        self._tools = [
+            types.Tool(
+                name="ask_ai",
+                description="Send a question to the AI portal and return the response",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The question to ask the AI"
+                        }
+                    },
+                    "required": ["query"]
+                }
+            ),
+            types.Tool(
+                name="check_portal_status",
+                description="Check the status of the portal connection and authentication",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            ),
+            types.Tool(
+                name="list_available_models",
+                description="List available AI models in the portal",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            ),
+            types.Tool(
+                name="get_portal_session",
+                description="Get current portal session information",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
+            )
+        ]
+        
+        # Register tool handlers using decorators
+        self._register_handlers()
+    
+    def _register_handlers(self):
+        """Register all tool handlers using the new decorator pattern"""
+        
+        @self.call_tool()
+        async def handle_tools(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
+            """Handle all tool calls"""
+            logger.info(f"Tool called: {name} with arguments: {arguments}")
+            
+            try:
+                if name == "ask_ai":
+                    return await self._handle_ask_ai(arguments)
+                elif name == "check_portal_status":
+                    return await self._handle_check_portal_status(arguments)
+                elif name == "list_available_models":
+                    return await self._handle_list_available_models(arguments)
+                elif name == "get_portal_session":
+                    return await self._handle_get_portal_session(arguments)
+                else:
+                    return [types.TextContent(
+                        type="text", 
+                        text=f"Error: Unknown tool '{name}'"
+                    )]
+            except Exception as e:
+                logger.error(f"Error in tool {name}: {e}")
+                return [types.TextContent(
+                    type="text", 
+                    text=f"Error: {str(e)}"
+                )]
+    
+    async def list_tools(self) -> List[types.Tool]:
+        """Return the list of available tools"""
+        return self._tools
+    
+    async def _handle_ask_ai(self, arguments: Dict[str, Any]) -> List[types.TextContent]:
+        """Handle ask_ai tool call"""
         query = arguments.get("query")
         if not query:
-            raise ValueError("'query' argument is required for 'ask_ai' tool")
-        logger.info(f"ask_ai_tool invoked with query: {query}")
+            return [types.TextContent(type="text", text="Error: 'query' parameter is required")]
+        
+        logger.info(f"ask_ai called with query: {query}")
         try:
             response_text = await self.browser_agent.ask_ai(query)
-            logger.info(f"ask_ai_tool received response: {response_text}")
-            return {"response": response_text}
+            logger.info(f"AI response received: {response_text[:100]}...")
+            return [types.TextContent(type="text", text=response_text)]
         except Exception as e:
-            logger.error(f"Error in ask_ai tool: {e}")
-            raise
+            logger.error(f"Error in ask_ai: {e}")
+            return [types.TextContent(type="text", text=f"Error: {str(e)}")]
+    
+    async def _handle_check_portal_status(self, arguments: Dict[str, Any]) -> List[types.TextContent]:
+        """Handle check_portal_status tool call"""
+        logger.info("check_portal_status called")
+        try:
+            status = await self.browser_agent.check_portal_status()
+            status_text = json.dumps(status, indent=2)
+            return [types.TextContent(type="text", text=status_text)]
+        except Exception as e:
+            logger.error(f"Error in check_portal_status: {e}")
+            return [types.TextContent(type="text", text=f"Error: {str(e)}")]
+    
+    async def _handle_list_available_models(self, arguments: Dict[str, Any]) -> List[types.TextContent]:
+        """Handle list_available_models tool call"""
+        logger.info("list_available_models called")
+        try:
+            models = await self.browser_agent.list_available_models()
+            models_text = json.dumps(models, indent=2)
+            return [types.TextContent(type="text", text=models_text)]
+        except Exception as e:
+            logger.error(f"Error in list_available_models: {e}")
+            return [types.TextContent(type="text", text=f"Error: {str(e)}")]
+    
+    async def _handle_get_portal_session(self, arguments: Dict[str, Any]) -> List[types.TextContent]:
+        """Handle get_portal_session tool call"""
+        logger.info("get_portal_session called")
+        try:
+            session = await self.browser_agent.get_portal_session()
+            session_text = json.dumps(session, indent=2)
+            return [types.TextContent(type="text", text=session_text)]
+        except Exception as e:
+            logger.error(f"Error in get_portal_session: {e}")
+            return [types.TextContent(type="text", text=f"Error: {str(e)}")]
 
     async def start(self):
         """Start the MCP server and connect to browser"""
@@ -91,11 +181,6 @@ class MCPServer(Server):
         except Exception as e:
             logger.error(f"Error stopping MCP server: {e}")
             raise
-
-
-def main_docstring():
-    """Entry point for the MCP server. Ensures graceful shutdown."""
-    pass
 
 
 async def main():
