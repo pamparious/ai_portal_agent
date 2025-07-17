@@ -152,13 +152,15 @@ logger.info('Portal query initiated', {
 ## Environment Setup
 
 ### Prerequisites
-- Windows 11 with Edge browser
+- Windows 11 with Edge or Chrome browser
 - Node.js 18+ with npm
 - VS Code with TypeScript extension
-- Edge browser with debugging enabled
+- Browser with debugging enabled (Edge or Chrome)
 
 ### Browser Configuration
-Edge must be started with debugging enabled (preserves login data):
+Your browser (Edge or Chrome) must be started with debugging enabled (preserves login data):
+
+**Microsoft Edge:**
 ```bash
 # Windows Command Prompt
 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
@@ -168,6 +170,18 @@ Edge must be started with debugging enabled (preserves login data):
 
 # Alternative location (newer installs)
 "C:\Program Files\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
+```
+
+**Google Chrome:**
+```bash
+# Windows Command Prompt
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+
+# PowerShell
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+
+# Alternative location (32-bit installs)
+"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
 ```
 
 **Important**: Do NOT use `--user-data-dir` parameter as this would create a new profile without your Thomson Reuters login data. The default profile preserves all authentication and login sessions.
@@ -209,7 +223,7 @@ mcp-agent --status
 ## Debugging & Troubleshooting
 
 ### Common Issues
-1. **Browser Connection Failed**: Check if Edge is running with debugging port
+1. **Browser Connection Failed**: Check if your browser (Edge or Chrome) is running with debugging port
 2. **Authentication Required**: User needs to log in to Thomson Reuters portal
 3. **Portal UI Changed**: Update DOM selectors and interaction patterns
 4. **Rate Limited**: Implement backoff and retry logic

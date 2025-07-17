@@ -4,7 +4,7 @@ A Python-based MCP (Model Context Protocol) server that enables secure access to
 
 ## Features
 
-- **Secure Browser Connection**: Connects to existing Edge browser sessions without storing credentials
+- **Secure Browser Connection**: Connects to existing Edge or Chrome browser sessions without storing credentials
 - **MCP Protocol Support**: Full MCP server implementation with 4 core tools
 - **CLI Interface**: Command-line interface for VS Code terminal integration
 - **Robust Portal Integration**: Dynamic DOM selectors and retry logic
@@ -15,7 +15,7 @@ A Python-based MCP (Model Context Protocol) server that enables secure access to
 
 1. **Prerequisites**:
    - Python 3.8+
-   - Microsoft Edge browser
+   - Microsoft Edge or Google Chrome browser
    - Node.js (for Playwright)
 
 2. **Install dependencies**:
@@ -24,10 +24,12 @@ A Python-based MCP (Model Context Protocol) server that enables secure access to
    playwright install chromium
    ```
 
-3. **Configure Edge browser**:
-   Start Edge with debugging enabled (preserves your login data):
+3. **Configure your browser**:
+   Start your browser with debugging enabled (preserves your login data):
    
    **Option A: Use the provided scripts (Recommended)**
+   
+   For Microsoft Edge:
    ```bash
    # Windows Command Prompt
    start-edge-debug.bat
@@ -36,7 +38,18 @@ A Python-based MCP (Model Context Protocol) server that enables secure access to
    .\start-edge-debug.ps1
    ```
    
+   For Google Chrome:
+   ```bash
+   # Windows Command Prompt
+   start-chrome-debug.bat
+   
+   # PowerShell
+   .\start-chrome-debug.ps1
+   ```
+   
    **Option B: Manual command (preserves existing profile)**
+   
+   For Microsoft Edge:
    ```bash
    # Windows Command Prompt
    "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
@@ -46,6 +59,18 @@ A Python-based MCP (Model Context Protocol) server that enables secure access to
    
    # Alternative location (newer installs)
    "C:\Program Files\Microsoft\Edge\Application\msedge.exe" --remote-debugging-port=9222
+   ```
+   
+   For Google Chrome:
+   ```bash
+   # Windows Command Prompt
+   "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+   
+   # PowerShell
+   & "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+   
+   # Alternative location (32-bit installs)
+   "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
    ```
    
    **⚠️ Important**: Do NOT use `--user-data-dir` parameter as this would create a new profile without your Thomson Reuters login data.
@@ -139,7 +164,7 @@ MCP_LOG_LEVEL=DEBUG python -m cli.terminal_interface ask "test question"
 ## Security
 
 - **No Credential Storage**: Uses existing browser sessions and login data
-- **Profile Preservation**: Uses default Edge profile to maintain Thomson Reuters authentication
+- **Profile Preservation**: Uses default browser profile to maintain Thomson Reuters authentication
 - **Input Validation**: Sanitizes all inputs and responses
 - **Domain Restrictions**: Configured allowed domains
 - **Audit Logging**: Comprehensive logging for compliance
@@ -150,14 +175,14 @@ MCP_LOG_LEVEL=DEBUG python -m cli.terminal_interface ask "test question"
 ### Common Issues
 
 1. **Browser Connection Failed**:
-   - Ensure Edge is running with the correct command (see installation section)
+   - Ensure your browser (Edge or Chrome) is running with the correct command (see installation section)
    - Check firewall settings - port 9222 must be accessible
    - Verify port 9222 is not in use by another application
-   - Try different Edge installation paths if needed
+   - Try different browser installation paths if needed
 
 2. **Authentication Required**:
-   - Ensure you're using the default Edge profile (no `--user-data-dir` parameter)
-   - Log in to Thomson Reuters portal manually in your regular Edge browser
+   - Ensure you're using the default browser profile (no `--user-data-dir` parameter)
+   - Log in to Thomson Reuters portal manually in your regular browser
    - Verify session is active before starting the agent
    - If using helper scripts, they automatically preserve your login data
 

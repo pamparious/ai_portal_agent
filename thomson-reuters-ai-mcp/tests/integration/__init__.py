@@ -1,1 +1,0 @@
-"""Integration tests for MCP AI Portal Agent."""

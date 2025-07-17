@@ -10,7 +10,26 @@
       "Bash(del debug_*.py debug_*.png final_validation_test.py test_*.py test_*.png nul)",
       "Bash(rm:*)",
       "Bash(find:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(start-chrome-debug.bat)",
+      "Bash(cmd:*)",
+      "Bash(curl:*)",
+      "Bash(tasklist:*)",
+      "Bash(powershell:*)",
+      "Bash(if [ -f \"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" ])",
+      "Bash(then echo \"Chrome found at Program Files\")",
+      "Bash(elif [ -f \"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe\" ])",
+      "Bash(then echo \"Chrome found at Program Files x86\")",
+      "Bash(else echo \"Chrome not found\")",
+      "Bash(fi)",
+      "Bash(playwright install:*)",
+      "Bash(zen listmodels:*)",
+      "Bash(where zen)",
+      "Bash(ls:*)",
+      "Bash(mcp list:*)",
+      "Bash(./start-chrome-debug.bat)",
+      "Bash(dir:*)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }
